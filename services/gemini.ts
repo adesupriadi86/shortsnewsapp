@@ -1,9 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 
 export async function generateAIImage(prompt: string): Promise<string> {
-    const apiKey = process.env.API_KEY;
+    // Ambil key dari Local Storage browser pengguna
+    const apiKey = localStorage.getItem('user_gemini_api_key'); 
     if (!apiKey) {
-        throw new Error("API Key is not configured in environment variables.");
+        throw new Error("API Key belum diatur. Silakan masukkan API Key Anda di panel AI.");
     }
 
     try {
