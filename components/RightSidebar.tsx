@@ -1,3 +1,4 @@
+
 /// <reference lib="dom" />
 
 import React, { useState, useEffect } from 'react';
@@ -33,7 +34,7 @@ export const RightSidebar: React.FC<Props> = ({
     const [aiResult, setAiResult] = React.useState<string | null>(null);
     const [aiMode, setAiMode] = React.useState<'background' | 'overlay'>('background');
 
-    // Tambahkan di bagian atas komponen (di bawah state lain)
+    // --- NEW STATE FOR BYOK ---
     const [userApiKey, setUserApiKey] = useState(localStorage.getItem('user_gemini_api_key') || '');
     const [showKeyInput, setShowKeyInput] = useState(false);
 
@@ -42,6 +43,7 @@ export const RightSidebar: React.FC<Props> = ({
         setShowKeyInput(false);
         alert("API Key berhasil disimpan!");
     };
+    // --------------------------
 
     const handleGenerate = async () => {
         if (!aiPrompt) return;
@@ -61,7 +63,7 @@ export const RightSidebar: React.FC<Props> = ({
     return (
         <div className="w-full md:w-72 bg-[#121212] flex flex-col border-l border-[#2a2a2a] h-[30vh] md:h-full z-20 shadow-2xl shrink-0">
             <div className="p-3 bg-[#181818] border-b border-[#2a2a2a] flex justify-between items-center h-12 shrink-0">
-                <h2 className={`text-xs font-bold tracking-wide ${view === 'layer' ? 'text-yellow-400' : view === 'ai' ? 'text-purple-400' : view === 'templates' ? 'text-blue-400' : 'text-blue-400'}`}>
+                <h2 className={`text-xs font-bold tracking-wide ${view === 'layer' ? 'text-yellow-400' : view === 'ai' ? 'text-purple-400' : 'text-blue-400'}`}>
                     {view === 'layer' ? 'EDIT LAYER' : view === 'ai' ? 'AI GENERATOR' : view === 'templates' ? 'TEMPLATES' : 'GLOBAL SETTINGS'}
                 </h2>
                 {view !== 'global' && (
@@ -276,7 +278,7 @@ export const RightSidebar: React.FC<Props> = ({
                     </>
                 )}
 
-                {/* TEMPLATE VIEW (UPDATED) */}
+                {/* TEMPLATE VIEW */}
                 {view === 'templates' && (
                      <div className="bg-gray-800/50 p-3 rounded border border-orange-900/50">
                         <h3 className="text-xs font-bold text-orange-400 mb-2 border-b border-gray-700 pb-1">SAVED TEMPLATES</h3>
@@ -315,7 +317,7 @@ export const RightSidebar: React.FC<Props> = ({
                 {/* AI VIEW (UPDATED) */}
                 {view === 'ai' && (
                     <div className="space-y-4">
-                        {/* --- KODE BARU MULAI DARI SINI --- */}
+                        {/* --- KODE BARU UNTUK INPUT KEY --- */}
                         <div className="bg-[#1a1a1a] p-3 rounded border border-gray-700 mb-2">
                             <div className="flex justify-between items-center mb-2">
                                 <label className="text-[10px] font-bold text-gray-400">GEMINI API KEY</label>
@@ -342,13 +344,13 @@ export const RightSidebar: React.FC<Props> = ({
                                     >
                                         Simpan Key
                                     </button>
-                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" className="block text-center text-[9px] text-gray-500 hover:text-gray-300">
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="block text-center text-[9px] text-gray-500 hover:text-gray-300">
                                         Dapatkan API Key di sini
                                     </a>
                                 </div>
                             )}
                         </div>
-                        {/* --- KODE BARU SELESAI --- */}
+                        {/* --- AKHIR KODE BARU --- */}
 
                         <div className="bg-[#1a1a1a] p-3 rounded border border-purple-900/50 relative">
                             <label className="text-[10px] font-bold text-purple-400 mb-2 block border-b border-gray-700 pb-1">AI IMAGE GENERATOR</label>
