@@ -1,38 +1,39 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 export async function generateAIImage(prompt: string): Promise<string> {
-
-    // Ambil API key user ONLY
-    const apiKey = localStorage.getItem("user_gemini_api_key");
-
-    if (!apiKey || apiKey.trim() === "") {
-        throw new Error("API Key belum diatur. Silakan masukkan API Key Anda.");
+    const apiKey = localStorage.getItem('user_gemini_api_key');
+    if (!apiKey) {
+        throw new Error("API Key belum diatur. Silakan masukkan API Key Anda di panel AI.");
     }
 
-    // Gunakan API key user
-    const genAI = new GoogleGenerativeAI(apiKey);
-
     try {
-        // Model image-capable
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
+        const ai = new GoogleGenAI({ apiKey });
+
+        // Using generateContent with gemini-2.5-flash-image for standard generation
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    { text: prompt }
+                ]
+            },
+            config: {}
         });
 
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-
-        // Cari base64 image
+        // Search for image part
         for (const candidate of response.candidates || []) {
-            for (const part of candidate.content.parts || []) {
-                if (part.inlineData && part.inlineData.data) {
-                    return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            if (candidate.content && candidate.content.parts) {
+                for (const part of candidate.content.parts) {
+                    if (part.inlineData && part.inlineData.mimeType.startsWith('image/')) {
+                        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                    }
                 }
             }
         }
-
-        throw new Error("Gambar tidak ditemukan dari response.");
-    } catch (err) {
-        console.error("Gemini Error:", err);
-        throw err;
+        
+        throw new Error("No image generated.");
+    } catch (error) {
+        console.error("Gemini Image Gen Error:", error);
+        throw error;
     }
 }
