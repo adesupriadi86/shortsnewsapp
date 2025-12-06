@@ -5,23 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ShortsNews Editor</title>
 
+  <!-- ================================
+       PERFORMANCE OPTIMIZATION
+       ================================ -->
+
+  <!-- Preconnect to speed up Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Merriweather:wght@400;700&family=Montserrat:wght@400;700&family=Open+Sans:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet" />
+  <link 
+    href="https://fonts.googleapis.com/css2?family=Anton&family=Merriweather:wght@400;700&family=Montserrat:wght@400;700&family=Open+Sans:wght@400;700&family=Roboto:wght@400;700&display=swap" 
+    rel="stylesheet"
+  />
+
+  <!-- Preload critical CSS to reduce blocking -->
+  <link rel="preload" href="/index.css" as="style" />
+  <link rel="stylesheet" href="/index.css" />
+
+  <!-- Preload JS entry (Vite will replace with hashed filename) -->
+  <link rel="modulepreload" href="/index.tsx" />
 
   <!-- FontAwesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+  <link 
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    crossorigin="anonymous"
+  />
 
-  <!-- FFmpeg -->
-  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-  <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+  <!-- ================================
+       EXTERNAL LIBRARIES
+       ================================ -->
 
-  <!-- VITE akan memproses semua CSS termasuk tailwind -->
-  <link rel="stylesheet" href="/index.css" />
+  <!-- FFmpeg UMD -->
+  <script 
+    src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"
+    defer
+  ></script>
+  <script 
+    src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"
+    defer
+  ></script>
 </head>
+
 <body>
   <div id="root"></div>
 
-  <!-- ENTRY POINT UTAMA -->
+  <!-- ENTRY POINT (Vite will handle hashed JS output) -->
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
