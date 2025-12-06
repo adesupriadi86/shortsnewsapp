@@ -1,0 +1,8 @@
+{
+  "name": "Salinan ShortsNews Editor",
+  "description": "A professional AI-powered video editor for creating short-form news content.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
