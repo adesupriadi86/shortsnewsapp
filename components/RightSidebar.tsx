@@ -1,4 +1,3 @@
-
 /// <reference lib="dom" />
 
 import React, { useState, useEffect } from 'react';
@@ -34,6 +33,16 @@ export const RightSidebar: React.FC<Props> = ({
     const [aiResult, setAiResult] = React.useState<string | null>(null);
     const [aiMode, setAiMode] = React.useState<'background' | 'overlay'>('background');
 
+    // Tambahkan di bagian atas komponen (di bawah state lain)
+    const [userApiKey, setUserApiKey] = useState(localStorage.getItem('user_gemini_api_key') || '');
+    const [showKeyInput, setShowKeyInput] = useState(false);
+
+    const handleSaveKey = () => {
+        localStorage.setItem('user_gemini_api_key', userApiKey);
+        setShowKeyInput(false);
+        alert("API Key berhasil disimpan!");
+    };
+
     const handleGenerate = async () => {
         if (!aiPrompt) return;
         
@@ -52,7 +61,7 @@ export const RightSidebar: React.FC<Props> = ({
     return (
         <div className="w-full md:w-72 bg-[#121212] flex flex-col border-l border-[#2a2a2a] h-[30vh] md:h-full z-20 shadow-2xl shrink-0">
             <div className="p-3 bg-[#181818] border-b border-[#2a2a2a] flex justify-between items-center h-12 shrink-0">
-                <h2 className={`text-xs font-bold tracking-wide ${view === 'layer' ? 'text-yellow-400' : view === 'ai' ? 'text-purple-400' : 'text-blue-400'}`}>
+                <h2 className={`text-xs font-bold tracking-wide ${view === 'layer' ? 'text-yellow-400' : view === 'ai' ? 'text-purple-400' : view === 'templates' ? 'text-blue-400' : 'text-blue-400'}`}>
                     {view === 'layer' ? 'EDIT LAYER' : view === 'ai' ? 'AI GENERATOR' : view === 'templates' ? 'TEMPLATES' : 'GLOBAL SETTINGS'}
                 </h2>
                 {view !== 'global' && (
@@ -306,6 +315,41 @@ export const RightSidebar: React.FC<Props> = ({
                 {/* AI VIEW (UPDATED) */}
                 {view === 'ai' && (
                     <div className="space-y-4">
+                        {/* --- KODE BARU MULAI DARI SINI --- */}
+                        <div className="bg-[#1a1a1a] p-3 rounded border border-gray-700 mb-2">
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="text-[10px] font-bold text-gray-400">GEMINI API KEY</label>
+                                <button 
+                                    onClick={() => setShowKeyInput(!showKeyInput)} 
+                                    className="text-[9px] text-blue-400 hover:underline"
+                                >
+                                    {showKeyInput ? 'Hide' : 'Edit Key'}
+                                </button>
+                            </div>
+                            
+                            {(showKeyInput || !userApiKey) && (
+                                <div className="space-y-2">
+                                    <input 
+                                        type="password" 
+                                        placeholder="Paste Gemini API Key here..."
+                                        value={userApiKey}
+                                        onChange={(e) => setUserApiKey(e.target.value)}
+                                        className="w-full bg-[#0f0f0f] border border-[#333] text-white px-2 py-1 text-[10px] rounded"
+                                    />
+                                    <button 
+                                        onClick={handleSaveKey}
+                                        className="w-full bg-blue-900/30 hover:bg-blue-900/50 text-blue-300 text-[9px] py-1 rounded border border-blue-800"
+                                    >
+                                        Simpan Key
+                                    </button>
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" className="block text-center text-[9px] text-gray-500 hover:text-gray-300">
+                                        Dapatkan API Key di sini
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                        {/* --- KODE BARU SELESAI --- */}
+
                         <div className="bg-[#1a1a1a] p-3 rounded border border-purple-900/50 relative">
                             <label className="text-[10px] font-bold text-purple-400 mb-2 block border-b border-gray-700 pb-1">AI IMAGE GENERATOR</label>
                             
