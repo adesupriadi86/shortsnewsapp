@@ -1,8 +1,4 @@
 
-
-
-
-
 export const CANVAS_WIDTH = 720;
 export const CANVAS_HEIGHT = 1280;
 export const ASPECT_RATIO = 9 / 16;
@@ -19,6 +15,14 @@ export const VFX_TYPES = [
     { value: 'confetti', label: '🎉 Confetti' },
     { value: 'tvnoise', label: '📺 Glitch' },
     { value: 'cinema', label: '🎬 Cinema Bars' },
+];
+
+export const BG_ANIMATION_TYPES = [
+    { value: 'none', label: 'None' },
+    { value: 'zoom', label: 'Slow Zoom' },
+    { value: 'shake', label: 'Camera Shake' },
+    { value: 'pulse', label: 'Pulse Beat' },
+    { value: 'wobble', label: 'Wobble' },
 ];
 
 // REVISI: PALET WARNA CERAH (Bright Backgrounds)
