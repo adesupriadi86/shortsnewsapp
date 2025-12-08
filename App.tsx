@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { EditorState, Layer, Template, NewsDraft, LayerType, VFXState, OverlayState } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, FONTS, COLOR_PALETTES, VFX_TYPES } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, FONTS, COLOR_PALETTES, VFX_TYPES, BG_ANIMATION_TYPES } from './constants';
 import { LeftSidebar } from './components/LeftSidebar';
 import { RightSidebar } from './components/RightSidebar';
 import { EditorCanvas } from './components/EditorCanvas';
@@ -18,7 +18,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 const getInitialState = (): EditorState => ({
   layers: [],
   selectedLayerId: null,
-  bgConfig: { x: 0, y: 0, scale: 1, blur: 0, type: 'none' },
+  bgConfig: { x: 0, y: 0, scale: 1, blur: 0, type: 'none', animation: 'none', animSpeed: 1, animIntensity: 1 },
   vfxState: { type: 'none', color: '#ffffff', opacity: 1, size: 1, speed: 1, wind: 0 },
   overlayState: { type: 'none', x: 0, y: 400, scale: 1, opacity: 1 },
   audioConfig: { musicVol: 0.5, videoVol: 1, layerVol: 1, trim: 0, totalDuration: 0 },
@@ -28,6 +28,7 @@ const getInitialState = (): EditorState => ({
   isRecording: false,
   batchVideos: [],
   batchAudios: [],
+  batchOverlays: [], // Added
   newsQueue: []
 });
 
@@ -247,6 +248,49 @@ export default function App(): React.ReactElement {
     }
   };
 
+  const handleApplyBatchOverlay = async (file: File) => {
+     const url = URL.createObjectURL(file);
+     const type = file.type.startsWith('video') ? 'video' : 'image';
+     const id = generateId();
+     
+     // Remove existing batch overlay first
+     setState(prev => ({
+         ...prev,
+         layers: prev.layers.filter(l => l.name !== 'Batch Overlay')
+     }));
+
+     let newItem: Layer = {
+         id, type: type as LayerType, name: 'Batch Overlay',
+         x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, width: 300, height: 100, scale: 1, rotation: 0,
+         src: url
+     };
+
+     if (type === 'image') {
+        const img = new Image();
+        img.src = url;
+        await new Promise(r => img.onload = r);
+        newItem.element = img;
+        newItem.width = img.width;
+        newItem.height = img.height;
+        if (img.width > CANVAS_WIDTH * 0.5) newItem.scale = (CANVAS_WIDTH * 0.5) / img.width;
+     } else {
+        const v = document.createElement('video');
+        v.src = url;
+        v.crossOrigin = "anonymous";
+        v.loop = true;
+        v.muted = false; v.volume = 1.0; 
+        await new Promise(r => v.onloadedmetadata = r);
+        v.currentTime = 0.01;
+        newItem.element = v;
+        newItem.width = v.videoWidth;
+        newItem.height = v.videoHeight;
+        if (v.videoWidth > CANVAS_WIDTH * 0.5) newItem.scale = (CANVAS_WIDTH * 0.5) / v.videoWidth;
+        audioManagerRef.current?.connectLayer(v);
+     }
+
+     setState(prev => ({ ...prev, layers: [...prev.layers, newItem] }));
+  };
+
   const openCamera = (target: 'bg' | 'layer') => {
       setCameraTarget(target);
       setShowCameraRecorder(true);
@@ -400,6 +444,14 @@ export default function App(): React.ReactElement {
       }
   };
 
+  const handleBatchLayerUpload = async (files: File[]) => {
+      setState(prev => ({ ...prev, batchOverlays: files }));
+      if (files.length > 0) {
+          // Preview first overlay
+          await handleApplyBatchOverlay(files[0]);
+      }
+  };
+
   const handleAIImageGenerated = async (url: string, type: 'background' | 'overlay') => {
     const safeUrl = getCorsImageUrl(url); 
     if (type === 'background') {
@@ -498,6 +550,12 @@ export default function App(): React.ReactElement {
           const audioFile = state.batchAudios[newIndex % state.batchAudios.length];
           await handleAudioUpload(audioFile);
       }
+      
+      // 4. Load Overlay if available
+      if (state.batchOverlays.length > 0) {
+          const overlayFile = state.batchOverlays[newIndex % state.batchOverlays.length];
+          await handleApplyBatchOverlay(overlayFile);
+      }
   };
 
   const applyDraftToCanvas = (draft: NewsDraft, randomize: boolean = false) => {
@@ -540,6 +598,8 @@ export default function App(): React.ReactElement {
     const existingSummary = state.layers.find(l => l.name === 'Summary');
     const existingSource = state.layers.find(l => l.name === 'Source');
     const existingMedia = state.layers.find(l => l.name === 'News Media');
+    // Preserve any manual overlays (but remove batch overlays if they will be re-added by batch process logic separately)
+    // Note: applyDraftToCanvas keeps 'Batch Overlay' if we don't filter it out, but handleApplyBatchOverlay will remove/replace it.
     
     const pushLayers = (imageLayer: Layer | null, actualImageHeight: number) => {
         const layersToAdd: Layer[] = [];
@@ -781,7 +841,7 @@ export default function App(): React.ReactElement {
 
   // --- BATCH ENGINE ---
   const runBatchProcessing = async () => {
-      const { newsQueue, batchVideos, batchAudios } = state;
+      const { newsQueue, batchVideos, batchAudios, batchOverlays } = state;
       if (newsQueue.length === 0) return;
       
       setIsBatchProcessing(true);
@@ -789,18 +849,38 @@ export default function App(): React.ReactElement {
       isRecordingCancelled.current = false;
 
       const originalVfxType = state.vfxState.type;
-
+      
       for (let i = 0; i < newsQueue.length; i++) {
           if (isRecordingCancelled.current) break;
 
           setBatchProgress({ current: i + 1, total: newsQueue.length });
           const newsItem = newsQueue[i];
 
+          // 1. RANDOMIZE VFX
           if (originalVfxType !== 'none') {
              const activeVfx = VFX_TYPES.filter(v => v.value !== 'none');
              const randomVfx = activeVfx[Math.floor(Math.random() * activeVfx.length)].value;
              setState(prev => ({ ...prev, vfxState: { ...prev.vfxState, type: randomVfx } }));
           }
+
+          // 2. RANDOMIZE BG ANIMATION
+          const animOptions = BG_ANIMATION_TYPES.filter(a => a.value !== 'none');
+          let selectedAnim: any = 'none';
+          if (Math.random() > 0.2 && animOptions.length > 0) {
+              selectedAnim = animOptions[Math.floor(Math.random() * animOptions.length)].value;
+          }
+          const randomSpeed = 0.5 + Math.random() * 1.5; 
+          const randomIntensity = 0.5 + Math.random(); 
+
+          setState(prev => ({ 
+              ...prev, 
+              bgConfig: { 
+                  ...prev.bgConfig, 
+                  animation: selectedAnim,
+                  animSpeed: randomSpeed,
+                  animIntensity: randomIntensity
+              } 
+          }));
 
           applyDraftToCanvas(newsItem, true);
 
@@ -812,6 +892,11 @@ export default function App(): React.ReactElement {
           if (batchAudios.length > 0) {
               const audioFile = batchAudios[i % batchAudios.length];
               await handleAudioUpload(audioFile);
+          }
+          
+          if (batchOverlays.length > 0) {
+              const overlayFile = batchOverlays[i % batchOverlays.length];
+              await handleApplyBatchOverlay(overlayFile);
           }
 
           await new Promise(r => setTimeout(r, 2000));
@@ -881,6 +966,7 @@ export default function App(): React.ReactElement {
         onBatchBgUpload={handleBatchBgUpload}
         onAudioUpload={handleAudioUpload}
         onBatchAudioUpload={handleBatchAudioUpload}
+        onBatchLayerUpload={handleBatchLayerUpload} // Added
         onClearBg={() => { setState(s => ({ ...s, bgConfig: { ...s.bgConfig, type: 'none', src: undefined } })); videoRef.current.pause(); videoRef.current.src = ""; setState(prev => ({...prev, batchVideos: []})); }}
         onClearAudio={() => { audioManagerRef.current?.reset(); setState(s => ({ ...s, audioConfig: { ...s.audioConfig, totalDuration: 0, src: undefined } })); setState(prev => ({...prev, batchAudios: []})); }}
         onSelectLayer={(id) => { setState(s => ({ ...s, selectedLayerId: id })); if(id) setView('layer'); }}
@@ -968,6 +1054,7 @@ export default function App(): React.ReactElement {
           onSelectLayer={(id) => { setState(s => ({ ...s, selectedLayerId: id })); if (id) setView('layer'); }}
           onUpdateLayerPos={(id, x, y) => setState(prev => ({ ...prev, layers: prev.layers.map(l => l.id === id ? { ...l, x, y } : l) }))}
           onUpdateBgPos={(x, y) => setState(s => ({ ...s, bgConfig: { ...s.bgConfig, x, y } }))}
+          onUpdateOverlayPos={(x, y) => setState(prev => ({ ...prev, overlayState: { ...prev.overlayState, x, y } }))}
           onAutoStop={() => { if (state.isRecording) stopRecording(); else setState(s => ({ ...s, isPlaying: false })); }}
           onPrevPreview={() => handleBatchPreview('prev')}
           onNextPreview={() => handleBatchPreview('next')}
