@@ -16,6 +16,7 @@ interface Props {
   onSelectLayer: (id: string | null) => void;
   onUpdateLayerPos: (id: string, x: number, y: number) => void;
   onUpdateBgPos: (x: number, y: number) => void;
+  onUpdateOverlayPos: (x: number, y: number) => void; // ADDED
   onAutoStop: () => void;
   canvasRef: React.RefObject<HTMLCanvasElement>;
   onPrevPreview?: () => void;
@@ -25,7 +26,7 @@ interface Props {
 }
 
 export const EditorCanvas: React.FC<Props> = ({ 
-    state, videoRef, bgImageRef, onSelectLayer, onUpdateLayerPos, onUpdateBgPos, onAutoStop, canvasRef,
+    state, videoRef, bgImageRef, onSelectLayer, onUpdateLayerPos, onUpdateBgPos, onUpdateOverlayPos, onAutoStop, canvasRef,
     onPrevPreview, onNextPreview, batchIndex, batchTotal
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +44,7 @@ export const EditorCanvas: React.FC<Props> = ({
   // Interaction state
   const isDragging = useRef(false);
   const isDraggingBg = useRef(false);
+  const isDraggingOverlay = useRef(false); // ADDED
   const startDragPos = useRef({ x: 0, y: 0 });
   
   // Resize handler
@@ -86,8 +88,8 @@ export const EditorCanvas: React.FC<Props> = ({
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Draw BG
-    drawBackground(ctx, state.bgConfig, videoRef.current!, bgImageRef.current);
+    // Draw BG (Pass Date.now() for animation)
+    drawBackground(ctx, state.bgConfig, videoRef.current!, bgImageRef.current, Date.now());
 
     // Update & Draw VFX
     vfxSystem.current?.update(state.vfxState, ctx);
@@ -188,7 +190,30 @@ export const EditorCanvas: React.FC<Props> = ({
       const p = getCoords(e.nativeEvent);
       startDragPos.current = p;
       
-      // Hit Test (reverse order for top-most first)
+      // 1. Check Overlay Hit (Top Priority - rendered on top)
+      if (state.overlayState && state.overlayState.type !== 'none') {
+          const { type, x, y, scale } = state.overlayState;
+          const cx = CANVAS_WIDTH / 2 + (x || 0);
+          const cy = CANVAS_HEIGHT / 2 + (y || 0);
+          
+          let w = 200; // default width
+          if (type === 'subscribe') w = 240;
+          else if (type === 'like') w = 180;
+          else if (type === 'follow') w = 200;
+          
+          const h = 70; // default height
+          const sw = w * scale;
+          const sh = h * scale;
+
+          // Simple Rect Hit Test
+          if (p.x >= cx - sw/2 && p.x <= cx + sw/2 && p.y >= cy - sh/2 && p.y <= cy + sh/2) {
+              isDraggingOverlay.current = true;
+              onSelectLayer(null); // Deselect any layer
+              return;
+          }
+      }
+
+      // 2. Hit Test Layers (reverse order for top-most first)
       const hit = [...state.layers].reverse().find(l => {
          const w = (l.width || 300) * l.scale;
          const h = (l.height || 100) * l.scale;
@@ -206,13 +231,15 @@ export const EditorCanvas: React.FC<Props> = ({
   };
 
   const handleMouseMove = (e: any) => {
-      if (!isDragging.current && !isDraggingBg.current) return;
+      if (!isDragging.current && !isDraggingBg.current && !isDraggingOverlay.current) return;
       e.preventDefault();
       const p = getCoords(e.nativeEvent);
       const dx = p.x - startDragPos.current.x;
       const dy = p.y - startDragPos.current.y;
 
-      if (isDragging.current && state.selectedLayerId) {
+      if (isDraggingOverlay.current) {
+          onUpdateOverlayPos(state.overlayState.x + dx, state.overlayState.y + dy);
+      } else if (isDragging.current && state.selectedLayerId) {
           const l = state.layers.find(x => x.id === state.selectedLayerId);
           if (l) {
             onUpdateLayerPos(l.id, l.x + dx, l.y + dy);
@@ -227,6 +254,7 @@ export const EditorCanvas: React.FC<Props> = ({
   const handleMouseUp = () => {
       isDragging.current = false;
       isDraggingBg.current = false;
+      isDraggingOverlay.current = false;
   };
 
   return (
