@@ -37,6 +37,10 @@ export interface BGConfig {
   blur: number;
   type: 'image' | 'video' | 'none';
   src?: string;
+  // Animation Props
+  animation?: 'none' | 'shake' | 'zoom' | 'pulse' | 'wobble';
+  animSpeed?: number;
+  animIntensity?: number;
 }
 
 export interface VFXState {
@@ -80,6 +84,7 @@ export interface EditorState {
   // Batch Processing State
   batchVideos: File[];
   batchAudios: File[];
+  batchOverlays: File[]; // Added
   newsQueue: NewsDraft[];
 }
 
