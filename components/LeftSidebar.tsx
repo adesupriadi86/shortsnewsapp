@@ -1,7 +1,7 @@
 
 import React, { useRef } from 'react';
 import { EditorState } from '../types';
-import { FolderOpen, Save, Wand2, Video, Music, Image as ImageIcon, Type, Trash2, Camera, Globe, RotateCcw, Scissors } from 'lucide-react';
+import { FolderOpen, Save, Wand2, Video, Music, Image as ImageIcon, Type, Trash2, Camera, Globe, RotateCcw, Scissors, Layers } from 'lucide-react';
 
 interface Props {
     state: EditorState;
@@ -10,6 +10,7 @@ interface Props {
     // --- NEW BATCH PROPS ---
     onBatchBgUpload: (files: File[]) => void;
     onBatchAudioUpload: (files: File[]) => void;
+    onBatchLayerUpload: (files: File[]) => void; // Added
     // -----------------------
     onAudioUpload: (file: File) => void;
     onClearBg: () => void;
@@ -29,7 +30,7 @@ interface Props {
 }
 
 export const LeftSidebar: React.FC<Props> = ({
-    state, onAddLayer, onBgUpload, onBatchBgUpload, onBatchAudioUpload, onAudioUpload, onClearBg, onClearAudio,
+    state, onAddLayer, onBgUpload, onBatchBgUpload, onBatchAudioUpload, onBatchLayerUpload, onAudioUpload, onClearBg, onClearAudio,
     onSelectLayer, onDeleteLayer, onTrimAudio, onOpenTemplates, onSaveTemplate, 
     onOpenAI, onOpenNews, onOpenLongVideo, onAddCamera, onAddBgCamera, onReset
 }) => {
@@ -39,6 +40,7 @@ export const LeftSidebar: React.FC<Props> = ({
     const fileInputAudioRef = useRef<HTMLInputElement>(null);
     const fileInputBatchAudioRef = useRef<HTMLInputElement>(null);
     const fileInputOverlayRef = useRef<HTMLInputElement>(null);
+    const fileInputBatchLayerRef = useRef<HTMLInputElement>(null); // Added
 
     return (
         <div className="w-full md:w-72 bg-[#121212] flex flex-col border-r border-[#2a2a2a] h-[35vh] md:h-full z-20 shadow-2xl shrink-0">
@@ -98,7 +100,7 @@ export const LeftSidebar: React.FC<Props> = ({
                             <button 
                                 onClick={() => fileInputBatchBgRef.current?.click()} 
                                 className="bg-blue-900/30 text-blue-300 px-2 py-0.5 rounded text-[9px] hover:bg-blue-900/50 border border-blue-800 transition"
-                                title="Upload multiple videos for Autopilot"
+                                title="Upload multiple media for Autopilot"
                             >
                                 + BATCH
                             </button>
@@ -111,7 +113,7 @@ export const LeftSidebar: React.FC<Props> = ({
                     {state.batchVideos.length > 0 && (
                         <div className="mb-2 bg-[#151515] border border-blue-900/30 rounded p-2">
                             <p className="text-[9px] text-blue-400 mb-1 font-bold flex justify-between">
-                                <span>Queue: {state.batchVideos.length} Videos</span>
+                                <span>Queue: {state.batchVideos.length} Media</span>
                             </p>
                             <div className="max-h-20 overflow-y-auto custom-scrollbar space-y-1">
                                 {state.batchVideos.map((f, i) => (
@@ -128,9 +130,9 @@ export const LeftSidebar: React.FC<Props> = ({
                         <span className="text-[10px] text-gray-400">{state.bgConfig.type !== 'none' ? 'Media Loaded' : 'Upload Single BG'}</span>
                     </div>
                     
-                    {/* INPUTS */}
+                    {/* INPUTS (Allowed video/image for batch) */}
                     <input ref={fileInputBgRef} type="file" accept="video/*,image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onBgUpload(e.target.files[0])} />
-                    <input ref={fileInputBatchBgRef} type="file" multiple accept="video/*" className="hidden" onChange={(e) => e.target.files && e.target.files.length > 0 && onBatchBgUpload(Array.from(e.target.files) as File[])} />
+                    <input ref={fileInputBatchBgRef} type="file" multiple accept="video/*,image/*" className="hidden" onChange={(e) => e.target.files && e.target.files.length > 0 && onBatchBgUpload(Array.from(e.target.files) as File[])} />
                 </div>
 
                 {/* --- AUDIO SECTION (UPDATED) --- */}
@@ -175,14 +177,41 @@ export const LeftSidebar: React.FC<Props> = ({
 
                 {/* Layers */}
                 <div className="border-t border-[#262626] pt-3">
-                    <label className="text-[10px] font-bold text-yellow-400 mb-2 block">LAYERS</label>
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-[10px] font-bold text-yellow-400">LAYERS</label>
+                        {/* BATCH BUTTON FOR LAYERS */}
+                        <button 
+                            onClick={() => fileInputBatchLayerRef.current?.click()} 
+                            className="bg-yellow-900/30 text-yellow-300 px-2 py-0.5 rounded text-[9px] hover:bg-yellow-900/50 border border-yellow-800 transition"
+                            title="Batch Overlay Layers"
+                        >
+                            + BATCH
+                        </button>
+                    </div>
+
+                    {/* BATCH QUEUE DISPLAY FOR LAYERS */}
+                    {state.batchOverlays && state.batchOverlays.length > 0 && (
+                        <div className="mb-2 bg-[#151515] border border-yellow-900/30 rounded p-2">
+                            <p className="text-[9px] text-yellow-400 mb-1 font-bold">Queue: {state.batchOverlays.length} Overlays</p>
+                            <div className="max-h-20 overflow-y-auto custom-scrollbar space-y-1">
+                                {state.batchOverlays.map((f, i) => (
+                                    <div key={i} className="text-[9px] text-gray-400 truncate bg-[#222] px-1 rounded flex items-center">
+                                        <span className="text-yellow-500 mr-1">{i+1}.</span> {f.name}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-3 gap-1 mb-2">
                         <button onClick={() => fileInputOverlayRef.current?.click()} className="bg-[#222] hover:bg-[#333] py-2 rounded text-[10px] flex flex-col items-center text-gray-300"><ImageIcon size={12}/> Media</button>
                         <button onClick={() => onAddLayer('text')} className="bg-[#222] hover:bg-[#333] py-2 rounded text-[10px] flex flex-col items-center text-gray-300"><Type size={12}/> Text</button>
                         <button onClick={onAddCamera} className="bg-[#222] hover:bg-[#333] py-2 rounded text-[10px] flex flex-col items-center text-gray-300"><Camera size={12}/> Cam</button>
                     </div>
-                    <input ref={fileInputOverlayRef} type="file" accept="video/*,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if(f) { onAddLayer(f.type.startsWith('video')?'video':'image', f); e.target.value=''; } }} />
                     
+                    <input ref={fileInputOverlayRef} type="file" accept="video/*,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if(f) { onAddLayer(f.type.startsWith('video')?'video':'image', f); e.target.value=''; } }} />
+                    <input ref={fileInputBatchLayerRef} type="file" multiple accept="video/*,image/*" className="hidden" onChange={(e) => e.target.files && e.target.files.length > 0 && onBatchLayerUpload(Array.from(e.target.files) as File[])} />
+
                     <div className="space-y-1 pb-4">
                         {[...state.layers].reverse().map(l => (
                             <div key={l.id} onClick={(e) => { e.stopPropagation(); onSelectLayer(l.id); }} className={`p-2 rounded flex justify-between cursor-pointer ${state.selectedLayerId === l.id ? 'bg-blue-900' : 'bg-[#1a1a1a]'}`}>
