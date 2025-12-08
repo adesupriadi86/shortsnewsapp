@@ -1,3 +1,4 @@
+
 /// <reference lib="dom" />
 import { Layer, BGConfig } from "../types";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../constants";
@@ -31,10 +32,41 @@ export function drawBackground(
   ctx: CanvasRenderingContext2D,
   config: BGConfig,
   videoElement: HTMLVideoElement,
-  imageElement: HTMLImageElement | null
+  imageElement: HTMLImageElement | null,
+  timestamp: number = 0 // New param for animation
 ) {
   ctx.save();
-  ctx.translate(CANVAS_WIDTH / 2 + config.x, CANVAS_HEIGHT / 2 + config.y);
+  
+  // Center Point
+  const cx = CANVAS_WIDTH / 2 + config.x;
+  const cy = CANVAS_HEIGHT / 2 + config.y;
+  
+  ctx.translate(cx, cy);
+
+  // --- APPLY ANIMATIONS ---
+  const speed = config.animSpeed || 1;
+  const intensity = config.animIntensity || 1;
+  const time = timestamp / 1000; // seconds
+
+  if (config.animation === 'shake') {
+      const shakeX = Math.sin(time * 20 * speed) * 5 * intensity;
+      const shakeY = Math.cos(time * 15 * speed) * 5 * intensity;
+      ctx.translate(shakeX, shakeY);
+  } else if (config.animation === 'zoom') {
+      // Slow breathe zoom
+      const scaleFactor = 1 + (Math.sin(time * speed) * 0.1 * intensity);
+      ctx.scale(scaleFactor, scaleFactor);
+  } else if (config.animation === 'pulse') {
+      // Quick beat pulse
+      const beat = Math.sin(time * 5 * speed);
+      const scaleFactor = 1 + (beat > 0.7 ? 0.05 * intensity : 0);
+      ctx.scale(scaleFactor, scaleFactor);
+  } else if (config.animation === 'wobble') {
+      const angle = Math.sin(time * 2 * speed) * 0.05 * intensity;
+      ctx.rotate(angle);
+  }
+
+  // Base Scale
   ctx.scale(config.scale, config.scale);
 
   if (config.blur > 0) {
