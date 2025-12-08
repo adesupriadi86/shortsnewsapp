@@ -3,8 +3,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { EditorState, Template, VFXState, OverlayState } from '../types';
-import { FONTS, VFX_TYPES } from '../constants';
-import { X, Check, ArrowLeft, Trash2, LayoutTemplate, ThumbsUp, ExternalLink, Upload, ImagePlus, MonitorPlay, Clipboard, FileInput, AlertCircle, MousePointerClick, Keyboard } from 'lucide-react';
+import { FONTS, VFX_TYPES, BG_ANIMATION_TYPES } from '../constants';
+import { X, Check, ArrowLeft, Trash2, LayoutTemplate, ThumbsUp, ExternalLink, Upload, ImagePlus, MonitorPlay, Clipboard, FileInput, AlertCircle, MousePointerClick, Keyboard, Activity } from 'lucide-react';
 
 interface Props {
     state: EditorState;
@@ -34,17 +34,16 @@ export const RightSidebar: React.FC<Props> = ({
     const [pasteError, setPasteError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dropZoneRef = useRef<HTMLDivElement>(null);
+    
+    // Reference to the External VisionCraft Window for Auto-Close
+    const externalWindowRef = useRef<Window | null>(null);
 
     // --- PASTE LISTENER (CTRL+V) ---
-    // This works globally when the sidebar is open
     useEffect(() => {
         const handlePaste = (e: ClipboardEvent) => {
             if (view !== 'ai') return;
-            
-            // If we find an image, we clear error and use it
             let found = false;
 
-            // 1. Check Files directly
             if (e.clipboardData && e.clipboardData.files.length > 0) {
                 const file = e.clipboardData.files[0];
                 if (file.type.startsWith('image/')) {
@@ -55,7 +54,6 @@ export const RightSidebar: React.FC<Props> = ({
                 }
             }
 
-            // 2. Check Items (Fallback for some browsers)
             if (!found && e.clipboardData && e.clipboardData.items) {
                 const items = e.clipboardData.items;
                 for (let i = 0; i < items.length; i++) {
@@ -73,7 +71,6 @@ export const RightSidebar: React.FC<Props> = ({
             }
 
             if (!found) {
-                // Optional: Check if text is a URL to an image
                 const text = e.clipboardData?.getData('text');
                 if (text && (text.startsWith('http') || text.startsWith('data:image'))) {
                     e.preventDefault();
@@ -84,8 +81,21 @@ export const RightSidebar: React.FC<Props> = ({
 
             if (found) {
                 setPasteError(null);
-                // Remove focus visual after successful paste
                 dropZoneRef.current?.blur();
+                
+                // --- AUTO CLOSE LOGIC ---
+                if (externalWindowRef.current) {
+                    setTimeout(() => {
+                        try {
+                            if (!externalWindowRef.current?.closed) {
+                                externalWindowRef.current?.close();
+                            }
+                        } catch (e) {
+                            console.warn("Could not auto-close window", e);
+                        }
+                        externalWindowRef.current = null;
+                    }, 500);
+                }
             }
         };
         window.addEventListener('paste', handlePaste);
@@ -123,9 +133,6 @@ export const RightSidebar: React.FC<Props> = ({
         }
     };
 
-    // --- ACTIVATION LOGIC (NO API CALL) ---
-    // Instead of calling navigator.clipboard.read(), we just force focus 
-    // and tell the user to press the keys. This bypasses permission blocks.
     const handleActivateZone = () => {
         dropZoneRef.current?.focus();
         setIsFocused(true);
@@ -136,6 +143,14 @@ export const RightSidebar: React.FC<Props> = ({
         if (uploadedImage) {
             onAIImageGenerated(uploadedImage, type);
         }
+    };
+    
+    const handleOpenVisionCraft = () => {
+        const win = window.open(
+            "https://ai.studio/apps/drive/1dl5FdDfhlOO0z7Fm895QThIL5a5SJhIP?fullscreenApplet=true", 
+            "_blank"
+        );
+        externalWindowRef.current = win;
     };
 
     return (
@@ -161,6 +176,8 @@ export const RightSidebar: React.FC<Props> = ({
                             <div className="flex justify-between items-center mb-2">
                                 <label className="text-[10px] font-bold text-gray-400">BACKGROUND CONFIG</label>
                             </div>
+                            
+                            {/* Position Controls */}
                             <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
                                     <span className="text-[9px] text-gray-500 block">Scale</span>
@@ -181,10 +198,45 @@ export const RightSidebar: React.FC<Props> = ({
                                     />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-2 mb-3">
                                 <input type="number" placeholder="X" value={Math.round(state.bgConfig.x)} onChange={(e) => onUpdateGlobal({ bgConfig: { ...state.bgConfig, x: parseInt((e.target as HTMLInputElement).value) } })} className="bg-[#171717] border border-[#404040] text-white px-2 py-1 text-[10px] rounded" />
                                 <input type="number" placeholder="Y" value={Math.round(state.bgConfig.y)} onChange={(e) => onUpdateGlobal({ bgConfig: { ...state.bgConfig, y: parseInt((e.target as HTMLInputElement).value) } })} className="bg-[#171717] border border-[#404040] text-white px-2 py-1 text-[10px] rounded" />
                             </div>
+
+                            {/* Animation Controls (NEW) */}
+                            <label className="text-[10px] font-bold text-orange-400 mb-1 flex items-center gap-1">
+                                <Activity size={10} /> BG ANIMATION
+                            </label>
+                            <select 
+                                value={state.bgConfig.animation || 'none'} 
+                                onChange={(e) => onUpdateGlobal({ bgConfig: { ...state.bgConfig, animation: e.target.value } })}
+                                className="w-full bg-[#171717] border border-[#404040] text-white px-2 py-1 text-[10px] rounded mb-2"
+                            >
+                                {BG_ANIMATION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                            
+                            {(state.bgConfig.animation && state.bgConfig.animation !== 'none') && (
+                                <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                                    <div>
+                                        <div className="flex justify-between text-[9px] text-gray-500"><span>Speed</span><span>{state.bgConfig.animSpeed || 1}x</span></div>
+                                        <input 
+                                            type="range" min="0.1" max="5" step="0.1" 
+                                            value={state.bgConfig.animSpeed || 1} 
+                                            onChange={(e) => onUpdateGlobal({ bgConfig: { ...state.bgConfig, animSpeed: parseFloat(e.target.value) } })} 
+                                            className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between text-[9px] text-gray-500"><span>Intensity</span><span>{state.bgConfig.animIntensity || 1}</span></div>
+                                        <input 
+                                            type="range" min="0.1" max="3" step="0.1" 
+                                            value={state.bgConfig.animIntensity || 1} 
+                                            onChange={(e) => onUpdateGlobal({ bgConfig: { ...state.bgConfig, animIntensity: parseFloat(e.target.value) } })} 
+                                            className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* 2. OVERLAY / SOCIAL ACTIONS (NEW) */}
@@ -356,31 +408,27 @@ export const RightSidebar: React.FC<Props> = ({
                     </>
                 )}
 
-                {/* AI VIEW (UPDATED: FOCUS TRAP FOR PASTE) */}
+                {/* AI VIEW */}
                 {view === 'ai' && (
                     <div className="space-y-6 px-1">
-                        
-                        {/* STEP 1: CREATE EXTERNAL */}
+                        {/* AI steps content ... same as before */}
                         <div className="bg-[#1a1a1a] p-4 rounded border border-purple-900/50 relative">
                             <div className="absolute top-0 right-0 bg-purple-900 text-purple-200 text-[9px] font-bold px-2 py-0.5 rounded-bl">Step 1</div>
                             <h3 className="text-xs font-bold text-purple-400 mb-2 flex items-center gap-2">
                                 <MonitorPlay size={14} /> BUAT GAMBAR
                             </h3>
                             <p className="text-[10px] text-gray-400 mb-4 leading-relaxed">
-                                Buka Google AI Studio di tab baru untuk membuat gambar berkualitas tinggi secara gratis tanpa API Key.
+                                Buka VisionCraft AI di Google AI Studio di tab baru untuk membuat gambar berkualitas tinggi secara gratis tanpa API Key.
                             </p>
-                            <a 
-                                href="https://ai.studio/apps/drive/1dl5FdDfhlOO0z7Fm895QThIL5a5SJhIP?fullscreenApplet=true" 
-                                target="_blank" 
-                                rel="noreferrer"
+                            <button 
+                                onClick={handleOpenVisionCraft}
                                 className="w-full bg-gradient-to-r from-purple-700 to-blue-700 hover:from-purple-600 hover:to-blue-600 text-white text-xs py-3 rounded flex items-center justify-center gap-2 font-bold transition shadow-lg"
                             >
                                 <ExternalLink size={14} />
-                                BUKA GOOGLE AI STUDIO
-                            </a>
+                                BUKA VISIONCRAFT AI
+                            </button>
                         </div>
 
-                        {/* STEP 2: UPLOAD RESULT (FOCUS TRAP ZONE) */}
                         <div className="bg-[#1a1a1a] p-4 rounded border border-gray-700 relative">
                             <div className="absolute top-0 right-0 bg-gray-700 text-gray-200 text-[9px] font-bold px-2 py-0.5 rounded-bl">Step 2</div>
                             <h3 className="text-xs font-bold text-blue-400 mb-2 flex items-center gap-2">
@@ -422,7 +470,6 @@ export const RightSidebar: React.FC<Props> = ({
                                         </>
                                     )}
                                     
-                                    {/* Alternative: Upload Button */}
                                     <div className="absolute bottom-2 right-2">
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
@@ -445,7 +492,6 @@ export const RightSidebar: React.FC<Props> = ({
                                         </button>
                                     </div>
                                     
-                                    {/* Action Buttons */}
                                     <div className="grid grid-cols-2 gap-2 animate-in slide-in-from-bottom-2 fade-in">
                                         <button 
                                             onClick={() => handleApplyImage('background')}
