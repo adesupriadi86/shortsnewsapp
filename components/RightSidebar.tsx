@@ -1,11 +1,10 @@
 
 /// <reference lib="dom" />
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { EditorState, Template, VFXState, OverlayState } from '../types';
 import { FONTS, VFX_TYPES } from '../constants';
-import { X, Check, Loader2, ArrowLeft, Trash2, Key, ExternalLink, TriangleAlert, LayoutTemplate, ThumbsUp } from 'lucide-react';
-import { generateAIImage } from '../services/gemini';
+import { X, Check, ArrowLeft, Trash2, LayoutTemplate, ThumbsUp, ExternalLink, Upload, ImagePlus, MonitorPlay, Clipboard, FileInput, AlertCircle, MousePointerClick, Keyboard } from 'lucide-react';
 
 interface Props {
     state: EditorState;
@@ -28,35 +27,114 @@ export const RightSidebar: React.FC<Props> = ({
 }) => {
     const selectedLayer = state.layers.find(l => l.id === state.selectedLayerId);
     
-    // AI State
-    const [aiPrompt, setAiPrompt] = React.useState('');
-    const [isGenerating, setIsGenerating] = React.useState(false);
-    const [aiResult, setAiResult] = React.useState<string | null>(null);
-    const [aiMode, setAiMode] = React.useState<'background' | 'overlay'>('background');
+    // AI Manual Workflow State
+    const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [isFocused, setIsFocused] = useState(false); // Track focus state
+    const [pasteError, setPasteError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const dropZoneRef = useRef<HTMLDivElement>(null);
 
-    // --- NEW STATE FOR BYOK ---
-    const [userApiKey, setUserApiKey] = useState(localStorage.getItem('user_gemini_api_key') || '');
-    const [showKeyInput, setShowKeyInput] = useState(false);
+    // --- PASTE LISTENER (CTRL+V) ---
+    // This works globally when the sidebar is open
+    useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            if (view !== 'ai') return;
+            
+            // If we find an image, we clear error and use it
+            let found = false;
 
-    const handleSaveKey = () => {
-        localStorage.setItem('user_gemini_api_key', userApiKey);
-        setShowKeyInput(false);
-        alert("API Key berhasil disimpan!");
+            // 1. Check Files directly
+            if (e.clipboardData && e.clipboardData.files.length > 0) {
+                const file = e.clipboardData.files[0];
+                if (file.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const url = URL.createObjectURL(file);
+                    setUploadedImage(url);
+                    found = true;
+                }
+            }
+
+            // 2. Check Items (Fallback for some browsers)
+            if (!found && e.clipboardData && e.clipboardData.items) {
+                const items = e.clipboardData.items;
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        const blob = items[i].getAsFile();
+                        if (blob) {
+                            e.preventDefault();
+                            const url = URL.createObjectURL(blob);
+                            setUploadedImage(url);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!found) {
+                // Optional: Check if text is a URL to an image
+                const text = e.clipboardData?.getData('text');
+                if (text && (text.startsWith('http') || text.startsWith('data:image'))) {
+                    e.preventDefault();
+                    setUploadedImage(text);
+                    found = true;
+                }
+            }
+
+            if (found) {
+                setPasteError(null);
+                // Remove focus visual after successful paste
+                dropZoneRef.current?.blur();
+            }
+        };
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [view]);
+
+    // --- DRAG & DROP HANDLERS ---
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
     };
-    // --------------------------
 
-    const handleGenerate = async () => {
-        if (!aiPrompt) return;
-        
-        setIsGenerating(true);
-        setAiResult(null);
-        try {
-            const url = await generateAIImage(aiPrompt);
-            setAiResult(url);
-        } catch (e: any) {
-            window.alert("Gagal Generate: " + (e.message || "Unknown error. Check API Key configuration."));
-        } finally {
-            setIsGenerating(false);
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            const url = URL.createObjectURL(file);
+            setUploadedImage(url);
+            setPasteError(null);
+        }
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const url = URL.createObjectURL(file);
+            setUploadedImage(url);
+            setPasteError(null);
+        }
+    };
+
+    // --- ACTIVATION LOGIC (NO API CALL) ---
+    // Instead of calling navigator.clipboard.read(), we just force focus 
+    // and tell the user to press the keys. This bypasses permission blocks.
+    const handleActivateZone = () => {
+        dropZoneRef.current?.focus();
+        setIsFocused(true);
+        setPasteError(null);
+    };
+
+    const handleApplyImage = (type: 'background' | 'overlay') => {
+        if (uploadedImage) {
+            onAIImageGenerated(uploadedImage, type);
         }
     };
 
@@ -64,7 +142,7 @@ export const RightSidebar: React.FC<Props> = ({
         <div className="w-full md:w-72 bg-[#121212] flex flex-col border-l border-[#2a2a2a] h-[30vh] md:h-full z-20 shadow-2xl shrink-0">
             <div className="p-3 bg-[#181818] border-b border-[#2a2a2a] flex justify-between items-center h-12 shrink-0">
                 <h2 className={`text-xs font-bold tracking-wide ${view === 'layer' ? 'text-yellow-400' : view === 'ai' ? 'text-purple-400' : 'text-blue-400'}`}>
-                    {view === 'layer' ? 'EDIT LAYER' : view === 'ai' ? 'AI GENERATOR' : view === 'templates' ? 'TEMPLATES' : 'GLOBAL SETTINGS'}
+                    {view === 'layer' ? 'EDIT LAYER' : view === 'ai' ? 'AI STUDIO EXTERNAL' : view === 'templates' ? 'TEMPLATES' : 'GLOBAL SETTINGS'}
                 </h2>
                 {view !== 'global' && (
                     <button onClick={() => setView('global')} className="text-[10px] bg-gray-800 px-2 py-1 rounded text-gray-300 border border-gray-600 hover:bg-gray-700 flex items-center">
@@ -278,128 +356,122 @@ export const RightSidebar: React.FC<Props> = ({
                     </>
                 )}
 
-                {/* TEMPLATE VIEW */}
-                {view === 'templates' && (
-                     <div className="bg-gray-800/50 p-3 rounded border border-orange-900/50">
-                        <h3 className="text-xs font-bold text-orange-400 mb-2 border-b border-gray-700 pb-1">SAVED TEMPLATES</h3>
-                        {templates.length === 0 && <div className="text-center text-gray-500 text-[10px] py-4">No templates found.</div>}
-                        <div className="space-y-3">
-                            {templates.map(t => (
-                                <div key={t.id} className="bg-[#121212] p-3 rounded border border-gray-700 flex flex-col gap-2 shadow-lg">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <div className="text-xs font-bold text-gray-300 flex items-center gap-1">
-                                                <LayoutTemplate size={10} className="text-orange-500"/> {t.name}
-                                            </div>
-                                            <div className="text-[9px] text-gray-600 ml-3.5">{new Date(t.timestamp).toLocaleDateString()}</div>
+                {/* AI VIEW (UPDATED: FOCUS TRAP FOR PASTE) */}
+                {view === 'ai' && (
+                    <div className="space-y-6 px-1">
+                        
+                        {/* STEP 1: CREATE EXTERNAL */}
+                        <div className="bg-[#1a1a1a] p-4 rounded border border-purple-900/50 relative">
+                            <div className="absolute top-0 right-0 bg-purple-900 text-purple-200 text-[9px] font-bold px-2 py-0.5 rounded-bl">Step 1</div>
+                            <h3 className="text-xs font-bold text-purple-400 mb-2 flex items-center gap-2">
+                                <MonitorPlay size={14} /> BUAT GAMBAR
+                            </h3>
+                            <p className="text-[10px] text-gray-400 mb-4 leading-relaxed">
+                                Buka Google AI Studio di tab baru untuk membuat gambar berkualitas tinggi secara gratis tanpa API Key.
+                            </p>
+                            <a 
+                                href="https://ai.studio/apps/drive/1dl5FdDfhlOO0z7Fm895QThIL5a5SJhIP?fullscreenApplet=true" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="w-full bg-gradient-to-r from-purple-700 to-blue-700 hover:from-purple-600 hover:to-blue-600 text-white text-xs py-3 rounded flex items-center justify-center gap-2 font-bold transition shadow-lg"
+                            >
+                                <ExternalLink size={14} />
+                                BUKA GOOGLE AI STUDIO
+                            </a>
+                        </div>
+
+                        {/* STEP 2: UPLOAD RESULT (FOCUS TRAP ZONE) */}
+                        <div className="bg-[#1a1a1a] p-4 rounded border border-gray-700 relative">
+                            <div className="absolute top-0 right-0 bg-gray-700 text-gray-200 text-[9px] font-bold px-2 py-0.5 rounded-bl">Step 2</div>
+                            <h3 className="text-xs font-bold text-blue-400 mb-2 flex items-center gap-2">
+                                <Upload size={14} /> IMPORT HASIL
+                            </h3>
+                            <p className="text-[10px] text-gray-400 mb-3">
+                                Copy gambar dari AI Studio, lalu tempel di sini.
+                            </p>
+
+                            {!uploadedImage ? (
+                                <div 
+                                    ref={dropZoneRef}
+                                    tabIndex={0}
+                                    onClick={handleActivateZone}
+                                    onFocus={() => setIsFocused(true)}
+                                    onBlur={() => setIsFocused(false)}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    className={`border-2 border-dashed rounded p-4 flex flex-col items-center justify-center cursor-pointer transition h-40 relative outline-none 
+                                        ${isFocused 
+                                            ? 'border-blue-400 bg-blue-900/20 shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
+                                            : isDragging ? 'border-blue-400 bg-blue-900/20' : 'border-gray-700 hover:border-blue-500 hover:bg-[#202020] bg-[#151515]'}
+                                    `}
+                                >
+                                    {isFocused ? (
+                                        <div className="flex flex-col items-center animate-in zoom-in duration-200">
+                                            <Keyboard size={32} className="text-blue-400 mb-2 animate-pulse" />
+                                            <span className="text-xs text-blue-200 font-bold text-center">
+                                                SIAP! <br/>TEKAN <span className="text-white bg-blue-600 px-1 rounded">Ctrl + V</span> SEKARANG
+                                            </span>
                                         </div>
+                                    ) : (
+                                        <>
+                                            <MousePointerClick size={24} className={`mb-2 text-gray-500`} />
+                                            <span className="text-[10px] text-gray-400 font-bold text-center">
+                                                KLIK DISINI UNTUK<br/>MENGAKTIFKAN PASTE
+                                            </span>
+                                        </>
+                                    )}
+                                    
+                                    {/* Alternative: Upload Button */}
+                                    <div className="absolute bottom-2 right-2">
                                         <button 
-                                            onClick={() => onDeleteTemplate(t.id)} 
-                                            className="text-gray-600 hover:text-red-500 p-1 rounded hover:bg-red-900/10 transition"
-                                            title="Delete Template"
+                                            onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                                            className="bg-[#222] hover:bg-[#333] border border-gray-600 text-gray-400 text-[9px] p-1.5 rounded-full"
+                                            title="Upload Manual File"
                                         >
-                                            <Trash2 size={12} />
+                                            <Upload size={10} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="relative group">
+                                        <img src={uploadedImage} className="w-full rounded border border-gray-600 max-h-48 object-contain bg-black" />
+                                        <button 
+                                            onClick={() => setUploadedImage(null)}
+                                            className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-500 shadow-lg opacity-0 group-hover:opacity-100 transition"
+                                        >
+                                            <X size={12} />
                                         </button>
                                     </div>
                                     
-                                    <button 
-                                        onClick={() => onLoadTemplate(t)} 
-                                        className="w-full bg-green-900/20 hover:bg-green-600 border border-green-900/50 hover:border-green-500 text-green-500 hover:text-white py-2 rounded text-[10px] font-bold flex items-center justify-center gap-2 transition-all duration-200 group"
-                                    >
-                                        <Check size={12} className="group-hover:scale-125 transition" /> USE THIS TEMPLATE
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                     </div>
-                )}
-
-                {/* AI VIEW (UPDATED) */}
-                {view === 'ai' && (
-                    <div className="space-y-4">
-                        {/* --- KODE BARU UNTUK INPUT KEY --- */}
-                        <div className="bg-[#1a1a1a] p-3 rounded border border-gray-700 mb-2">
-                            <div className="flex justify-between items-center mb-2">
-                                <label className="text-[10px] font-bold text-gray-400">GEMINI API KEY</label>
-                                <button 
-                                    onClick={() => setShowKeyInput(!showKeyInput)} 
-                                    className="text-[9px] text-blue-400 hover:underline"
-                                >
-                                    {showKeyInput ? 'Hide' : 'Edit Key'}
-                                </button>
-                            </div>
-                            
-                            {(showKeyInput || !userApiKey) && (
-                                <div className="space-y-2">
-                                    <input 
-                                        type="password" 
-                                        placeholder="Paste Gemini API Key here..."
-                                        value={userApiKey}
-                                        onChange={(e) => setUserApiKey(e.target.value)}
-                                        className="w-full bg-[#0f0f0f] border border-[#333] text-white px-2 py-1 text-[10px] rounded"
-                                    />
-                                    <button 
-                                        onClick={handleSaveKey}
-                                        className="w-full bg-blue-900/30 hover:bg-blue-900/50 text-blue-300 text-[9px] py-1 rounded border border-blue-800"
-                                    >
-                                        Simpan Key
-                                    </button>
-                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="block text-center text-[9px] text-gray-500 hover:text-gray-300">
-                                        Dapatkan API Key di sini
-                                    </a>
+                                    {/* Action Buttons */}
+                                    <div className="grid grid-cols-2 gap-2 animate-in slide-in-from-bottom-2 fade-in">
+                                        <button 
+                                            onClick={() => handleApplyImage('background')}
+                                            className="bg-blue-900/40 border border-blue-600 hover:bg-blue-800 text-blue-100 text-[10px] py-2.5 rounded font-bold transition flex items-center justify-center gap-1"
+                                        >
+                                            <LayoutTemplate size={12} />
+                                            SET BG
+                                        </button>
+                                        <button 
+                                            onClick={() => handleApplyImage('overlay')}
+                                            className="bg-purple-900/40 border border-purple-600 hover:bg-purple-800 text-purple-100 text-[10px] py-2.5 rounded font-bold transition flex items-center justify-center gap-1"
+                                        >
+                                            <ImagePlus size={12} />
+                                            ADD LAYER
+                                        </button>
+                                    </div>
                                 </div>
                             )}
-                        </div>
-                        {/* --- AKHIR KODE BARU --- */}
-
-                        <div className="bg-[#1a1a1a] p-3 rounded border border-purple-900/50 relative">
-                            <label className="text-[10px] font-bold text-purple-400 mb-2 block border-b border-gray-700 pb-1">AI IMAGE GENERATOR</label>
                             
-                            <div className="flex gap-2 mb-3">
-                                <button 
-                                    onClick={() => setAiMode('background')}
-                                    className={`flex-1 text-[10px] py-1 rounded border ${aiMode === 'background' ? 'bg-purple-700 border-purple-500' : 'bg-gray-800 border-gray-600 text-gray-400'}`}
-                                >
-                                    Background
-                                </button>
-                                <button 
-                                    onClick={() => setAiMode('overlay')}
-                                    className={`flex-1 text-[10px] py-1 rounded border ${aiMode === 'overlay' ? 'bg-blue-700 border-blue-500' : 'bg-gray-800 border-gray-600 text-gray-400'}`}
-                                >
-                                    Overlay
-                                </button>
-                            </div>
-
-                            <div className="mb-2">
-                                <label className="text-[9px] text-gray-500 block mb-1">Image Prompt:</label>
-                                <textarea 
-                                    value={aiPrompt}
-                                    onChange={(e) => setAiPrompt((e.target as HTMLTextAreaElement).value)}
-                                    rows={3} 
-                                    className="bg-[#171717] border border-[#404040] text-white px-2 py-1 text-xs rounded w-full focus:outline-none focus:border-purple-500" 
-                                    placeholder={aiMode === 'background' ? "Futuristic news studio, dark theme..." : "A cute cat sticker, white background..."}
-                                />
-                            </div>
-
-                            <button 
-                                onClick={handleGenerate} 
-                                disabled={isGenerating || !aiPrompt}
-                                className="w-full bg-purple-700 hover:bg-purple-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:border-gray-700 text-white text-xs py-2 rounded font-bold mb-2 flex justify-center items-center transition"
-                            >
-                                {isGenerating ? <><Loader2 size={12} className="animate-spin mr-2" /> Generating...</> : "Generate Image"}
-                            </button>
-                            
-                            {aiResult && (
-                                <div className="flex flex-col gap-2 animate-in fade-in duration-300">
-                                    <img src={aiResult} className="w-full rounded border border-gray-600 object-cover h-32" alt="Generated" />
-                                    <button 
-                                        onClick={() => { onAIImageGenerated(aiResult, aiMode); setAiResult(null); }}
-                                        className="w-full bg-green-700 hover:bg-green-600 text-white text-xs py-1 rounded flex items-center justify-center"
-                                    >
-                                        <Check size={12} className="mr-1" /> Use Image
-                                    </button>
-                                </div>
-                            )}
+                            <input 
+                                ref={fileInputRef} 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={handleFileUpload} 
+                            />
                         </div>
                     </div>
                 )}
